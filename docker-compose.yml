@@ -1,0 +1,75 @@
+version: '3.8'
+services:
+  nest:
+    container_name: nest-api
+    build:
+      dockerfile: Dockerfile
+      context: .
+      # Only will build development stage from our dockerfile
+      target: development
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    volumes:
+      - ./src:/usr/app/src
+      - ./prisma:/usr/app/prisma
+      - .env:/usr/app/.env
+    # Run in dev Mode: yarn start:migrate:dev
+    command: yarn start:dev
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - redis
+
+  redis:
+    container_name: redis-cache
+    image: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+
+  nginx:
+    container_name: nginx-server
+    depends_on:
+      - nest
+      - postgres
+    environment:
+      - NGINX_SERVER_NAME=localhost
+      - NEST_HOST=nest
+      - NEST_PORT=5000
+      - NGINX_MAX_BODY=100M
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+
+  postgres:
+    image: postgres
+    restart: always
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - docker-nest-postgres:/var/lib/postgresql/data
+
+  test-db:
+    image: postgres:13
+    container_name: test-database
+    ports:
+      - "5435:5431"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+volumes:
+  docker-nest-postgres:
+  redis:
+    driver: local
